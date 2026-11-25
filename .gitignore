@@ -1,0 +1,16 @@
+# Input data (large; download from GBIF / ChecklistBank)
+*.zip
+*.csv
+
+# Pipeline cache (taxon matching)
+pipeline/work/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

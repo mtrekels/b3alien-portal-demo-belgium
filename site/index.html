@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alien species establishment</title>
+  <meta name="description" content="Demonstration of the GBF Target 6 headline indicator (rate of establishment of invasive alien species) computed with b3alien from GBIF occurrence cubes and GRIIS checklists.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.12.1/proj4.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@2.35.2/plotly-basic.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="eyebrow">Kunming-Montreal Global Biodiversity Framework · Target 6 · Demonstrator</div>
+      <h1>Rate of establishment of alien species in <span data-region>…</span></h1>
+      <p class="lede">
+        How many new alien species become established each year, and is the rate going up or down?
+        This page computes the headline indicator from open GBIF occurrence data and the national
+        GRIIS checklist with the <a href="https://github.com/mtrekels/b3alien">b3alien</a> Python package,
+        and shows how the results can be embedded in a national reporting portal.
+      </p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#indicators">Indicator</a><a href="#map-section">Map</a><a href="#trends">Trends</a>
+        <a href="#species-section">Species</a><a href="#methods">Methods &amp; data</a><a href="#integrate">Integrate</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="load-error" class="error" role="alert" hidden></div>
+
+    <section id="indicators" class="section" data-embed="indicators">
+      <div class="section-head">
+        <h2>Headline indicator <span class="muted">(<span data-window></span>)</span></h2>
+        <div class="subset-switch" role="radiogroup" aria-label="Species included in the indicator">
+          <button type="button" role="radio" data-subset="all" aria-checked="true">All alien species</button>
+          <button type="button" role="radio" data-subset="invasive" aria-checked="false">Invasive species only</button>
+        </div>
+      </div>
+      <p class="muted subset-note" data-subset-note></p>
+      <div id="indicator-cards" class="kpis" aria-live="polite"></div>
+    </section>
+
+    <section id="map-section" class="section card" data-embed="map">
+      <div class="card-head">
+        <div>
+          <h2>Where are alien species recorded?</h2>
+          <p class="muted" id="layer-help"></p>
+        </div>
+        <div class="controls">
+          <label>Layer <select id="layer-select"></select></label>
+          <label>Base map <select id="basemap-select"></select></label>
+          <label>Opacity <input id="opacity" type="range" min="0.2" max="1" step="0.05" value="0.8"></label>
+        </div>
+      </div>
+      <div id="species-controls" class="controls species-controls" hidden>
+        <label class="grow">Invasive species <select id="species-select"></select></label>
+        <label>Colour by
+          <select id="color-select">
+            <option value="occurrences">Occurrences</option>
+            <option value="year">Year of first record</option>
+          </select>
+        </label>
+        <label class="grow">Records up to <output id="year-output"></output>
+          <input id="year-slider" type="range" min="1900" max="2026" step="1">
+        </label>
+        <button id="year-play" type="button" aria-label="Play the spread over time">▶ Play</button>
+      </div>
+      <div class="map-wrap">
+        <div id="map" role="region" aria-label="Map of the EEA grid"></div>
+        <div id="legend" class="legend"></div>
+      </div>
+      <p class="note">EEA reference grid (EPSG:3035). Cells are aggregated to 10 km at small scales and shown at
+        1 km when zooming in. Hover a cell for its values. Use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + scroll to zoom.
+        Choose <em>One invasive species</em> as layer to follow the spread of a species over time.</p>
+    </section>
+
+    <section id="trends" class="section">
+      <div class="section-head trends-head">
+        <h2>Trends: <span data-subset-label>all alien species</span></h2>
+        <div class="subset-switch" role="radiogroup" aria-label="Species included in the indicator">
+          <button type="button" role="radio" data-subset="all" aria-checked="true">All alien species</button>
+          <button type="button" role="radio" data-subset="invasive" aria-checked="false">Invasive species only</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card" data-embed="cumulative">
+          <h2>Cumulative discoveries</h2>
+          <p class="muted">Checklist species (<span data-subset-label>all alien species</span>) by year of first
+            record in GBIF, with the Solow-Costello model and its 95% bootstrap confidence interval.</p>
+          <div id="chart-cumulative" class="chart"></div>
+        </div>
+        <div class="card" data-embed="annual">
+          <h2>Rate of establishment</h2>
+          <p class="muted">New species first recorded per year (bars) and the fitted annual rate of
+            establishment. Enable earlier years in the legend to see the full record.</p>
+          <div id="chart-annual" class="chart"></div>
+        </div>
+      </div>
+      <div class="card" data-embed="effort">
+        <h2>Sampling effort</h2>
+        <p class="muted">The number of discoveries depends on how much is observed. Survey effort has grown
+          strongly with citizen science: interpret trends in discoveries together with this curve.</p>
+        <div id="chart-effort" class="chart chart-wide"></div>
+      </div>
+      <p class="note">Drag to zoom in on a chart, double-click to reset. The camera icon downloads a PNG.</p>
+    </section>
+
+    <section id="species-section" class="section card" data-embed="species">
+      <div id="species">
+        <div class="card-head">
+          <div>
+            <h2>Alien species on the checklist</h2>
+            <p class="muted" id="species-count"></p>
+          </div>
+          <div class="controls">
+            <label>Search <input id="species-search" type="search" placeholder="Species name"></label>
+            <label>Show
+              <select id="species-filter">
+                <option value="all">All taxa</option>
+                <option value="observed">Recorded in GBIF</option>
+                <option value="not_observed">Not recorded in GBIF</option>
+                <option value="invasive">Invasive</option>
+                <option value="unmatched">Not matched to backbone</option>
+              </select>
+            </label>
+            <label>Habitat <select id="species-habitat"></select></label>
+            <button id="species-csv" type="button">Download CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="species-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="methods" class="section prose">
+      <h2>Methods</h2>
+      <ol>
+        <li><strong>Checklist.</strong> The national GRIIS checklist (ColDP format, ChecklistBank) is matched to the
+          GBIF taxonomic backbone (Catalogue of Life eXtended Release) used by the occurrence cube. Synonyms resolve
+          to the accepted species, infraspecific taxa to their species.</li>
+        <li><strong>Occurrence cube.</strong> A GBIF occurrence cube counts records per species, month and
+          grid cell. The cell codes of the EEA reference grid are enough to draw the map: no GIS files are needed.</li>
+        <li><strong>Discoveries.</strong> For each checklist species, the first month with a GBIF record gives
+          the year of discovery. The number of new species per year is the input of the model.</li>
+        <li><strong>Rate of establishment.</strong> The Solow &amp; Costello (2004) model separates the rate of
+          introduction from the probability of detection. Its parameter β₁ is the yearly trend of the introduction
+          rate (e<sup>β₁</sup> − 1 = relative change per year). Uncertainty is estimated by bootstrapping residuals.</li>
+        <li><strong>Invasive species.</strong> The indicator is also computed for the subset of checklist species
+          assessed as invasive in the checklist: flagged as invasive in the species profile, or with a national
+          degree of establishment "invasive" or "widespread invasive". This subset is much smaller,
+          so its confidence intervals are wider.</li>
+        <li><strong>Sampling effort.</strong> Observers and occurrences per year from the same cube document how
+          detectability changed over time.</li>
+      </ol>
+      <p class="muted">GBIF records reflect where and when people observed, not the true distribution: absence of
+        records is not evidence of absence, and discoveries lag behind introductions.</p>
+      <h2>Data sources</h2>
+      <ul id="sources" class="sources"></ul>
+    </section>
+
+    <section id="integrate" class="section prose">
+      <h2>Integrate in a reporting portal</h2>
+      <p>Everything on this page is static: a few JSON files produced by a Python pipeline and plain JavaScript.
+        A national portal can integrate the indicator in three ways:</p>
+      <ol>
+        <li><strong>Embed a component</strong> with an iframe. Each block can be shown on its own with the
+          <code>embed</code> parameter (<code>indicators</code>, <code>map</code>, <code>cumulative</code>,
+          <code>annual</code>, <code>effort</code>, <code>species</code>). Add <code>subset=invasive</code> for
+          the invasive species only. The map also accepts <code>layer</code> and <code>basemap</code>, and
+          <code>layer=species&amp;species=&lt;GBIF key&gt;&amp;color=year</code> for one invasive species.</li>
+        <li><strong>Use the data files</strong> (<a href="data/summary.json">summary.json</a>,
+          <a href="data/timeseries.json">timeseries.json</a>, <a href="data/species.json">species.json</a>,
+          <a href="data/invasive_species_cells.json">invasive_species_cells.json</a>,
+          <a href="data/grid_10km.json">grid_10km.json</a>, <a href="data/grid_1km.json">grid_1km.json</a>) with
+          the portal's own charting and mapping components.</li>
+        <li><strong>Re-run the pipeline</strong> for another country or a newer GBIF download; the page updates
+          without code changes.</li>
+      </ol>
+      <div id="embed-snippets" class="snippets"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      Demonstration built with <a href="https://github.com/mtrekels/b3alien">b3alien</a> ·
+      Occurrence data: GBIF.org · Checklist: GRIIS · Maps: MapLibre GL, base maps © OpenStreetMap contributors, Esri ·
+      Charts: Plotly
+    </div>
+  </footer>
+</body>
+</html>
