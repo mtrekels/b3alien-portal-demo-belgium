@@ -1,5 +1,7 @@
 # Publish the static site (site/) to GitHub Pages.
 # Enable it in the repository settings: Pages > Build and deployment > Source: GitHub Actions.
+# Upload and deployment run in separate jobs (GitHub's recommended layout), so the
+# deployment only starts once the uploaded site is registered.
 name: Deploy to GitHub Pages
 
 on:
@@ -14,19 +16,24 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
